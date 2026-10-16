@@ -1,0 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.dotted-path {
+  stroke-dasharray: 4, 4;
+}
