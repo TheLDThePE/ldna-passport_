@@ -18,12 +18,13 @@ export default function App() {
   const [empNo, setEmpNo] = useState('OPT-1001');
   const [userData, setUserData] = useState(null);
   const [passedStations, setPassedStations] = useState([]);
+  const [employeeList, setEmployeeList] = useState([]); // รายชื่อพนักงานแบบ Dynamic
   const [activeTab, setActiveTab] = useState('passport');
   const [loading, setLoading] = useState(false);
-  const [savingStations, setSavingStations] = useState([]); // แทร็กว่ากำลังยิงบันทึกสถานะไหน
+  const [savingStations, setSavingStations] = useState([]);
   const [errorMessage, setErrorMessage] = useState(null);
 
-  // Fetch Data จาก Backend API Proxy
+  // ดึงข้อมูลพนักงานและประวัติจาก Backend
   const fetchPassportData = async (targetEmp) => {
     setLoading(true);
     setErrorMessage(null);
@@ -33,6 +34,9 @@ export default function App() {
       if (res.ok) {
         setUserData(data);
         setPassedStations(data.passedStations || []);
+        if (data.allEmployees && data.allEmployees.length > 0) {
+          setEmployeeList(data.allEmployees); // อัปเดต Dropdown ด้วยรายชื่อจาก Google Sheet
+        }
       } else {
         setErrorMessage("ไม่สามารถดึงข้อมูลได้");
       }
@@ -48,18 +52,16 @@ export default function App() {
     fetchPassportData(empNo);
   }, [empNo]);
 
-  // 🚀 Optimistic UI Update: เปลี่ยนหน้าตาทันที 0.01 วินาที แล้วยิง Google Sheets เบื้องหลัง
+  // Optimistic UI Update
   const handleToggleStation = async (stationName) => {
     const isPassed = passedStations.some(p => p.includes(stationName));
     if (isPassed) return;
 
-    // 1. อัปเดต UI ทันทีทันใด (Optimistic)
     const previousPassed = [...passedStations];
     setPassedStations(prev => [...prev, stationName]);
     setSavingStations(prev => [...prev, stationName]);
 
     try {
-      // 2. ยิงบันทึกเข้า Google Sheets เบื้องหลังเงียบๆ
       const res = await fetch('/api/record', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -76,7 +78,6 @@ export default function App() {
       }
     } catch (err) {
       console.error("Save error:", err);
-      // 3. หากมี Error ให้ Rollback คืนค่าเดิมและแจ้งเตือน
       setPassedStations(previousPassed);
       alert("⚠️ บันทึกลง Google Sheets ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
     } finally {
@@ -87,23 +88,32 @@ export default function App() {
   const progressPercent = Math.round((passedStations.length / STATIONS_DATA.length) * 100);
 
   return (
-    // Responsive Wrapper: หน้าจอมือถือจะขยายเต็ม 100dvh ส่วนหน้าจอคอมพิวเตอร์จะเป็นกรอบโทรศัพท์สวยงาม
     <div className="w-full h-dvh sm:h-[812px] max-w-md mx-auto bg-[#f4f8fd] sm:rounded-[36px] shadow-2xl flex flex-col justify-between overflow-hidden relative border-0 sm:border-[6px] border-slate-900 font-sans select-none">
 
-      {/* Top Switcher Header */}
+      {/* Top Switcher Header (Dynamic Dropdown) */}
       <div className="bg-slate-900 text-white px-4 py-2 flex justify-between items-center text-xs font-bold shrink-0 z-20">
         <span className="tracking-wide">LDNA DOJO e-PASSPORT</span>
         <select
-          className="bg-slate-800 text-amber-400 border border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none"
+          className="bg-slate-800 text-amber-400 border border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none max-w-[180px] truncate"
           value={empNo}
           onChange={(e) => setEmpNo(e.target.value)}
         >
-          <option value="OPT-1001">OPT-1001 - SARAH CHEN</option>
-          <option value="OPT-1002">OPT-1002 - SUTTICHAI K.</option>
+          {employeeList.length > 0 ? (
+            employeeList.map(emp => (
+              <option key={emp.empNo} value={emp.empNo}>
+                {emp.empNo} - {emp.name}
+              </option>
+            ))
+          ) : (
+            <>
+              <option value="OPT-1001">OPT-1001 - SARAH CHEN</option>
+              <option value="OPT-1002">OPT-1002 - SUTTICHAI K.</option>
+            </>
+          )}
         </select>
       </div>
 
-      {/* Main Content Area (Scrollable) */}
+      {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto no-scrollbar px-3 pt-3 pb-20">
 
         <div className="text-center mb-2">
@@ -139,7 +149,6 @@ export default function App() {
           {activeTab === 'passport' ? (
             <div>
               <div className="relative min-h-[320px] w-full mt-2">
-                {/* SVG Connecting Lines */}
                 <svg className="absolute inset-0 w-full h-full pointer-events-none z-0" viewBox="0 0 100 100" preserveAspectRatio="none">
                   <path d="M 18,18 L 50,18 L 82,18 L 82,32 Q 82,44 66,44 L 34,44 L 18,44 Q 18,60 18,76 L 34,76 L 66,76"
                         fill="none" stroke="#cbd5e1" strokeWidth="1.2" className="dotted-path" />
@@ -209,7 +218,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Fixed Bottom Navigation Bar (ตรึงติดขอบล่างเสมอ ไม่ว่าจะเปิดรุ่นไหน) */}
+      {/* Bottom Nav */}
       <div className="bg-white border-t border-slate-200 px-4 py-2 flex justify-between items-center shrink-0 z-30 shadow-lg pb-safe">
         <button className="flex flex-col items-center text-[10px] font-bold text-slate-400 hover:text-blue-600">
           <Home className="w-5 h-5 mb-0.5" />
