@@ -13,22 +13,40 @@ export default async function handler(req, res) {
     const sheets = google.sheets({ version: 'v4', auth });
     const spreadsheetId = process.env.SPREADSHEET_ID;
 
-    // 1. ดึงข้อมูลพนักงานทั้งหมดจากแท็บ Manpower
+    // 1. ดึงข้อมูลพนักงานทั้งหมดจากแท็บ Manpower (คอลัมน์ A ถึง L)
     const manpowerRes = await sheets.spreadsheets.values.get({
       spreadsheetId,
       range: 'Manpower!A2:L',
     });
     const manpowerRows = manpowerRes.data.values || [];
 
-    // สร้าง List รายชื่อพนักงานทั้งหมดส่งกลับไปให้ Dropdown บน Frontend
-    const allEmployees = manpowerRows.map(row => ({
-      empNo: row[0] || '',
-      name: `${row[5] || ''} ${row[6] || ''}`.trim()
-    })).filter(e => e.empNo !== '');
+    // ดึงรายชื่อพนักงานทั้งหมด (ป้องกันกรณีคอลัมน์ว่าง)
+    const allEmployees = manpowerRows
+      .filter(row => row && row[0]) // เอาเฉพาะแถวที่มี EmpNo
+      .map(row => {
+        const empCode = row[0] || '';
+        // รวมชื่อภาษาอังกฤษ (F=NameE, G=SurnameE) หรือถ้าไม่มีใช้ชื่อไทย (C=NameT, D=SurnameT)
+        const firstName = row[5] || row[2] || '';
+        const lastName = row[6] || row[3] || '';
+        const fullName = `${firstName} ${lastName}`.trim();
 
-    // 2. ค้นหาข้อมูลพนักงานตาม empNo ที่ส่งมา (ถ้าไม่ส่งมาใช้คนแรก)
+        return {
+          empNo: empCode,
+          name: fullName || empCode
+        };
+      });
+
+    // 2. ค้นหาข้อมูลพนักงานตาม empNo ที่เลือก
     const targetEmp = empNo || (allEmployees[0]?.empNo || 'OPT-1001');
-    const userRow = manpowerRows.find(row => row[0] === targetEmp) || manpowerRows[0] || [];
+    const userRow = manpowerRows.find(row => row && row[0] === targetEmp) || manpowerRows[0] || [];
+
+    // ดึงชื่อ-แผนก-รูปโปรไฟล์
+    const empCode = userRow[0] || '';
+    const firstName = userRow[5] || userRow[2] || '';
+    const lastName = userRow[6] || userRow[3] || '';
+    const fullName = `${firstName} ${lastName}`.trim();
+    const deptCode = userRow[7] || 'Operator';
+    const profilePic = userRow[11] || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200';
 
     // 3. ดึงประวัติการประเมินจากแท็บ Record
     const recordRes = await sheets.spreadsheets.values.get({
@@ -37,18 +55,18 @@ export default async function handler(req, res) {
     });
     const recordRows = recordRes.data.values || [];
 
-    // คัดกรองเอาเฉพาะด่านที่ผ่าน (PASS) ของพนักงานคนนี้
+    // คัดกรองเอาเฉพาะสถานะ PASS ของพนักงานคนนี้
     const passedStations = recordRows
-      .filter(row => row[0] === targetEmp && row[2] === 'PASS')
+      .filter(row => row && row[0] === targetEmp && row[2] === 'PASS')
       .map(row => row[1]);
 
     return res.status(200).json({
-      empNo: userRow[0] || '',
-      name: `${userRow[5] || ''} ${userRow[6] || ''}`.trim(),
-      dept: userRow[7] || '',
-      pic: userRow[11] || '',
+      empNo: empCode,
+      name: fullName,
+      dept: deptCode,
+      pic: profilePic,
       passedStations: [...new Set(passedStations)],
-      allEmployees: allEmployees // ส่งรายชื่อพนักงานทั้งหมดกลับไป
+      allEmployees: allEmployees
     });
 
   } catch (error) {
