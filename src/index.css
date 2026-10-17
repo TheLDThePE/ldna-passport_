@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+  /* รองรับความสูงหน้าจอมือถือแบบ Dynamic Viewport Height (ตัดปัญหาแถบ URL Bar บัง) */
+  .h-dvh {
+    height: 100dvh;
+  }
+}
+
 .dotted-path {
   stroke-dasharray: 4, 4;
+}
+
+/* ซ่อน Scrollbar เพื่อความสวยงามบนมือถือ */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
